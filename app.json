@@ -10,14 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dillonb07.locator"
+      "bundleIdentifier": "dev.transcental.locator"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.dillonb07.locator"
+      "package": "dev.transcental.locator"
     },
     "web": {
       "bundler": "metro",
@@ -44,7 +44,7 @@
         "projectId": "6a60e0b7-d2ce-4264-be4a-edc9bcfa7f4c"
       }
     },
-    "owner": "dillonb07",
+    "owner": "transcental",
     "updates": {
       "url": "https://u.expo.dev/6a60e0b7-d2ce-4264-be4a-edc9bcfa7f4c"
     },
