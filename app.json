@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "HelloWorld",
-    "slug": "expo-template-default",
+    "name": "Locator",
+    "slug": "locator",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,13 +9,15 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dillonb07.locator"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.dillonb07.locator"
     },
     "web": {
       "bundler": "metro",
@@ -36,6 +38,18 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6a60e0b7-d2ce-4264-be4a-edc9bcfa7f4c"
+      }
+    },
+    "owner": "dillonb07",
+    "updates": {
+      "url": "https://u.expo.dev/6a60e0b7-d2ce-4264-be4a-edc9bcfa7f4c"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
