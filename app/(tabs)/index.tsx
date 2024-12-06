@@ -1,11 +1,96 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import { Image, StyleSheet, Platform, Switch, Pressable } from 'react-native';
 
 import { HelloWave } from '@/components/HelloWave';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useAsyncStorage } from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
+import * as Location from 'expo-location';
+
+
+const createBackgroundTask = async () => {
+  TaskManager.defineTask('share-location', async () => {
+    const now = Date.now();
+    
+    console.log(`Got background fetch call at date: ${new Date(now).toISOString()}`);
+    
+    // Be sure to return the successful result type!
+    return BackgroundFetch.BackgroundFetchResult.NewData;
+  });
+  
+};
+
 
 export default function HomeScreen() {
+  type Settings = {
+    enabled: boolean;
+  };
+
+  const [settings, setSettings] = useState<Settings>({ enabled: false });
+  const { getItem, setItem } = useAsyncStorage('settings');
+  const enabledSetting = settings['enabled'] ? true : false;
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [text, setText] = useState<string>('Locating you...');
+
+  const storeData = async (key: string, value: any) => {
+    try {
+      let settings = await getSettings();
+      if (settings) {
+        settings[key] = value;
+      } else {
+        settings = { [key]: value };
+      }
+      const jsonValue = JSON.stringify(settings);
+      await setItem(jsonValue);
+      setSettings(settings);
+    } catch (e) {
+      console.error(e)
+    }
+  };
+  const getSettings = async () => {
+    try {
+      const jsonValue = await getItem();
+      const parsed = jsonValue != null ? JSON.parse(jsonValue) : null;
+      if (parsed == null) {
+        setSettings({ enabled: false });
+      }
+      return parsed;
+    } catch (e) {
+      console.error(e)
+    }
+  };
+
+  useEffect(() => {
+    getSettings();
+  }, []);
+
+  const getCurrentLocation = async () => {
+    if (settings.enabled){
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setText('Permission to access location was denied! Please go to settings and enable location sharing for this app.');
+        return;
+      }
+      
+      let location = await Location.getCurrentPositionAsync({});
+      setLocation(location);
+      setText(`Latitude: ${location.coords.latitude}, Longitude: ${location.coords.longitude}`);
+    } else {
+      setText('Location sharing is disabled');
+    }
+  }
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
+  const toggleEnabled = async (value: boolean) => {
+    await storeData('enabled', value);
+    await getCurrentLocation();
+  }
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -16,40 +101,26 @@ export default function HomeScreen() {
         />
       }>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
+        <ThemedText type="title">Locator</ThemedText>
         <HelloWave />
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
+        <ThemedText type="subtitle">🗺️Where are you?</ThemedText>
+        <ThemedText type="default">{text}</ThemedText>
+        </ThemedView>
+      <ThemedView style={styles.setting}>
+        <ThemedText type="defaultSemiBold">Share Location</ThemedText>
+        <Switch onValueChange={toggleEnabled} value={enabledSetting} />
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
+      <ThemedView style={styles.setting}>
+        <Pressable onPress={getCurrentLocation}  style={({pressed}) => [
+            {
+              backgroundColor: pressed ? 'rgb(210, 230, 255)' : 'white',
+            },
+          ]}>
+          <ThemedText>Find me!</ThemedText>
+        </Pressable>
+        </ThemedView>
     </ParallaxScrollView>
   );
 }
@@ -71,4 +142,12 @@ const styles = StyleSheet.create({
     left: 0,
     position: 'absolute',
   },
+  setting: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Platform.OS === 'ios' ? 'systemGray4' : 'rgba(0, 0, 0, 0.12)',
+  }
 });
