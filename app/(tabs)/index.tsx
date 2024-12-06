@@ -1,10 +1,10 @@
-import { Image, StyleSheet, Platform, Switch, Pressable } from 'react-native';
+import { Image, StyleSheet, Platform, Switch, Pressable, TextInput } from 'react-native';
 
 import { HelloWave } from '@/components/HelloWave';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { useAsyncStorage } from '@react-native-async-storage/async-storage';
+import AsyncStorage, { useAsyncStorage } from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
@@ -14,11 +14,22 @@ import * as Location from 'expo-location';
 const createBackgroundTask = async () => {
   TaskManager.defineTask('share-location', async () => {
     const now = Date.now();
-    
-    console.log(`Got background fetch call at date: ${new Date(now).toISOString()}`);
-    
-    // Be sure to return the successful result type!
-    return BackgroundFetch.BackgroundFetchResult.NewData;
+    const settings = await AsyncStorage.getItem('settings');
+    if (settings && JSON.parse(settings).enabled) {
+      const location = await Location.getCurrentPositionAsync({});
+      
+      fetch(JSON.parse(settings)?.url || '', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          location,
+          timestamp: now,
+        }),
+      }) 
+      return BackgroundFetch.BackgroundFetchResult.NewData;
+    }
   });
   
 };
@@ -27,6 +38,7 @@ const createBackgroundTask = async () => {
 export default function HomeScreen() {
   type Settings = {
     enabled: boolean;
+    url?: string;
   };
 
   const [settings, setSettings] = useState<Settings>({ enabled: false });
@@ -34,6 +46,7 @@ export default function HomeScreen() {
   const enabledSetting = settings['enabled'] ? true : false;
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [text, setText] = useState<string>('Locating you...');
+  const [url, setURL] = useState<string>(settings['url'] || '');
 
   const storeData = async (key: string, value: any) => {
     try {
@@ -78,6 +91,16 @@ export default function HomeScreen() {
       let location = await Location.getCurrentPositionAsync({});
       setLocation(location);
       setText(`Latitude: ${location.coords.latitude}, Longitude: ${location.coords.longitude}`);
+      fetch(settings?.url || '', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          location,
+          timestamp: Date.now(),
+        }),
+      }) 
     } else {
       setText('Location sharing is disabled');
     }
@@ -89,6 +112,30 @@ export default function HomeScreen() {
   const toggleEnabled = async (value: boolean) => {
     await storeData('enabled', value);
     await getCurrentLocation();
+    if (value) {
+      await createBackgroundTask();
+      await registerBackgroundFetchAsync();
+    }
+    else {
+      await unregisterBackgroundFetchAsync();
+    }
+  }
+
+  async function registerBackgroundFetchAsync() {
+    return BackgroundFetch.registerTaskAsync('share-location', {
+      minimumInterval: 60 * 1, // 1 minute
+      stopOnTerminate: false, // android only,
+      startOnBoot: true, // android only
+    });
+  }
+
+  async function unregisterBackgroundFetchAsync() {
+    return BackgroundFetch.unregisterTaskAsync('share-location');
+  }
+
+  const onChangeURL = async (text: string) => {
+    await storeData('url', text);
+    setURL(text);
   }
 
   return (
@@ -116,10 +163,19 @@ export default function HomeScreen() {
         <Pressable onPress={getCurrentLocation}  style={({pressed}) => [
             {
               backgroundColor: pressed ? 'rgb(210, 230, 255)' : 'white',
+              color: pressed ? 'rgb(210, 230, 255)' : 'white',
             },
           ]}>
           <ThemedText>Find me!</ThemedText>
         </Pressable>
+        </ThemedView>
+        <ThemedView style={styles.setting}>
+        <ThemedText type="defaultSemiBold">Server URL</ThemedText>
+        <TextInput
+          style={styles.input}
+          onChangeText={onChangeURL}
+          value={url}
+        />
         </ThemedView>
     </ParallaxScrollView>
   );
@@ -149,5 +205,15 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: Platform.OS === 'ios' ? 'systemGray4' : 'rgba(0, 0, 0, 0.12)',
-  }
+  },
+  input: {
+    height: 40,
+    width: 200,
+    margin: 12,
+    borderWidth: 1,
+    padding: 10,
+    color: 'black',
+    borderColor: 'white',
+    backgroundColor: 'pink'
+  },
 });
