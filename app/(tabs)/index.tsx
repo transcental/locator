@@ -11,28 +11,27 @@ import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 
 
-const createBackgroundTask = async () => {
-  TaskManager.defineTask('share-location', async () => {
-    const now = Date.now();
-    const settings = await AsyncStorage.getItem('settings');
-    if (settings && JSON.parse(settings).enabled) {
-      const location = await Location.getCurrentPositionAsync({});
-      
-      fetch(JSON.parse(settings)?.url || '', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          location,
-          timestamp: now,
-        }),
-      }) 
-      return BackgroundFetch.BackgroundFetchResult.NewData;
-    }
-  });
-  
-};
+
+TaskManager.defineTask('share-location', async () => {
+  const now = Date.now();
+  const settings = await AsyncStorage.getItem('settings');
+  if (settings && JSON.parse(settings).enabled) {
+    const location = await Location.getCurrentPositionAsync({});
+    
+    fetch(JSON.parse(settings)?.url || '', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        location,
+        timestamp: now,
+      }),
+    }) 
+    return BackgroundFetch.BackgroundFetchResult.NewData;
+  }
+});
+
 
 
 export default function HomeScreen() {
@@ -43,11 +42,11 @@ export default function HomeScreen() {
 
   const [settings, setSettings] = useState<Settings>({ enabled: false });
   const { getItem, setItem } = useAsyncStorage('settings');
-  const enabledSetting = settings['enabled'] ? true : false;
+  const [enabledSetting, setEnabledSetting] = useState<boolean>(settings['enabled'] || false);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [text, setText] = useState<string>('Locating you...');
   const [url, setURL] = useState<string>(settings['url'] || '');
-
+  
   const storeData = async (key: string, value: any) => {
     try {
       let settings = await getSettings();
@@ -63,6 +62,7 @@ export default function HomeScreen() {
       console.error(e)
     }
   };
+
   const getSettings = async () => {
     try {
       const jsonValue = await getItem();
@@ -75,9 +75,12 @@ export default function HomeScreen() {
       console.error(e)
     }
   };
-
+  
   useEffect(() => {
     getSettings();
+    setURL(settings?.url || '');
+    setText('Locating you...');
+    setEnabledSetting(settings?.enabled || false);
   }, []);
 
   const getCurrentLocation = async () => {
@@ -112,18 +115,12 @@ export default function HomeScreen() {
   const toggleEnabled = async (value: boolean) => {
     await storeData('enabled', value);
     await getCurrentLocation();
-    if (value) {
-      await createBackgroundTask();
-      await registerBackgroundFetchAsync();
-    }
-    else {
-      await unregisterBackgroundFetchAsync();
-    }
+    await toggleFetchTask();
   }
 
   async function registerBackgroundFetchAsync() {
     return BackgroundFetch.registerTaskAsync('share-location', {
-      minimumInterval: 60 * 1, // 1 minute
+      minimumInterval: 60 * 10, // 1 minute
       stopOnTerminate: false, // android only,
       startOnBoot: true, // android only
     });
@@ -138,6 +135,30 @@ export default function HomeScreen() {
     setURL(text);
   }
 
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [status, setStatus] = useState<BackgroundFetch.BackgroundFetchStatus | null>();
+
+  useEffect(() => {
+    checkStatusAsync();
+  }, []);
+
+  const checkStatusAsync = async () => {
+    const status = await BackgroundFetch.getStatusAsync();
+    const isRegistered = await TaskManager.isTaskRegisteredAsync('share-location');
+    setStatus(status);
+    setIsRegistered(isRegistered);
+  };
+
+  const toggleFetchTask = async () => {
+    if (isRegistered) {
+      await unregisterBackgroundFetchAsync();
+    } else {
+      await registerBackgroundFetchAsync();
+    }
+
+    checkStatusAsync();
+  };
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -147,6 +168,12 @@ export default function HomeScreen() {
           style={styles.reactLogo}
         />
       }>
+        <ThemedText>
+          Background fetch status:{' '}
+          <ThemedText type="defaultSemiBold">
+            {status && BackgroundFetch.BackgroundFetchStatus[status]}
+          </ThemedText>
+        </ThemedText>
       <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Locator</ThemedText>
         <HelloWave />
